@@ -1,0 +1,14 @@
+{
+  "name": "driving-school-booking",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "dev": "concurrently -n server,client -c blue,green \"cd server && PORT=3105 npm run dev\" \"cd client && npm run dev\"",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
