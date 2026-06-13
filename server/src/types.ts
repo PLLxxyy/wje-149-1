@@ -59,6 +59,18 @@ export interface StudentHours {
   used_hours: number;
 }
 
+export interface HourAdjustment {
+  id: string;
+  student_id: string;
+  admin_id: string;
+  action: 'recharge' | 'deduct';
+  hours: number;
+  before_total: number;
+  after_total: number;
+  reason: string;
+  created_at: string;
+}
+
 export interface AuthRequest extends Request {
   user?: { id: string; role: string; username: string };
 }

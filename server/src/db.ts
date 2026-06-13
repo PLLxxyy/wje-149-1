@@ -79,6 +79,20 @@ function initDb(): void {
       used_hours INTEGER DEFAULT 0,
       FOREIGN KEY (student_id) REFERENCES users(id)
     );
+
+    CREATE TABLE IF NOT EXISTS hour_adjustments (
+      id TEXT PRIMARY KEY,
+      student_id TEXT NOT NULL,
+      admin_id TEXT NOT NULL,
+      action TEXT NOT NULL CHECK(action IN ('recharge', 'deduct')),
+      hours INTEGER NOT NULL,
+      before_total INTEGER NOT NULL,
+      after_total INTEGER NOT NULL,
+      reason TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (student_id) REFERENCES users(id),
+      FOREIGN KEY (admin_id) REFERENCES users(id)
+    );
   `);
 
   seedData();

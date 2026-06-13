@@ -63,6 +63,19 @@ export interface StudentHours {
   used_hours: number;
 }
 
+export interface HourAdjustment {
+  id: string;
+  student_id: string;
+  admin_id: string;
+  admin_name: string;
+  action: 'recharge' | 'deduct';
+  hours: number;
+  before_total: number;
+  after_total: number;
+  reason: string;
+  created_at: string;
+}
+
 export interface AdminStats {
   coachCount: number;
   studentCount: number;

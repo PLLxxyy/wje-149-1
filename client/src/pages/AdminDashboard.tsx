@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api';
-import { AdminStats } from '../types';
+import { AdminStats, HourAdjustment } from '../types';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -8,6 +8,18 @@ export default function AdminDashboard() {
   const [coaches, setCoaches] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [adjustModal, setAdjustModal] = useState<{ open: boolean; student: any | null }>({ open: false, student: null });
+  const [adjustAction, setAdjustAction] = useState<'recharge' | 'deduct'>('recharge');
+  const [adjustHours, setAdjustHours] = useState<string>('');
+  const [adjustReason, setAdjustReason] = useState<string>('');
+  const [adjustLoading, setAdjustLoading] = useState(false);
+  const [adjustments, setAdjustments] = useState<HourAdjustment[]>([]);
+  const [showHistory, setShowHistory] = useState<any | null>(null);
+
+  const refreshStudents = () => {
+    api.admin.getStudents().then(setStudents);
+  };
 
   useEffect(() => {
     Promise.all([
@@ -20,6 +32,59 @@ export default function AdminDashboard() {
       setStudents(st);
     }).finally(() => setLoading(false));
   }, []);
+
+  const openAdjustModal = (student: any) => {
+    setAdjustModal({ open: true, student });
+    setAdjustAction('recharge');
+    setAdjustHours('');
+    setAdjustReason('');
+    setAdjustments([]);
+    setShowHistory(null);
+  };
+
+  const closeAdjustModal = () => {
+    setAdjustModal({ open: false, student: null });
+    setShowHistory(null);
+  };
+
+  const handleAdjustSubmit = async () => {
+    if (!adjustModal.student) return;
+    const hoursNum = parseInt(adjustHours, 10);
+    if (!hoursNum || hoursNum <= 0) {
+      alert('请输入有效的正整数');
+      return;
+    }
+    setAdjustLoading(true);
+    try {
+      await api.admin.adjustHours(adjustModal.student.id, {
+        action: adjustAction,
+        hours: hoursNum,
+        reason: adjustReason,
+      });
+      alert(adjustAction === 'recharge' ? '充值成功' : '扣减成功');
+      refreshStudents();
+      closeAdjustModal();
+    } catch (err: any) {
+      alert(err.message || '操作失败');
+    } finally {
+      setAdjustLoading(false);
+    }
+  };
+
+  const toggleHistory = async (student: any) => {
+    if (showHistory && showHistory.id === student.id) {
+      setShowHistory(null);
+      setAdjustments([]);
+      return;
+    }
+    setShowHistory(student);
+    try {
+      const list = await api.admin.getHourAdjustments(student.id);
+      setAdjustments(list);
+    } catch (err: any) {
+      alert(err.message || '获取调整记录失败');
+    }
+  };
 
   if (loading) return <div className="container"><p>加载中...</p></div>;
   if (!stats) return <div className="container"><p>加载失败</p></div>;
@@ -224,22 +289,204 @@ export default function AdminDashboard() {
                   <th>剩余</th>
                   <th>已完成课时</th>
                   <th>注册时间</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
                 {students.map(s => (
-                  <tr key={s.id}>
-                    <td style={{ fontWeight: 500 }}>{s.name}</td>
-                    <td>{s.phone || '-'}</td>
-                    <td>{s.total_hours || 0}</td>
-                    <td>{s.used_hours || 0}</td>
-                    <td>{(s.total_hours || 0) - (s.used_hours || 0)}</td>
-                    <td>{s.completed_lessons}</td>
-                    <td>{s.created_at}</td>
-                  </tr>
+                  <React.Fragment key={s.id}>
+                    <tr>
+                      <td style={{ fontWeight: 500 }}>{s.name}</td>
+                      <td>{s.phone || '-'}</td>
+                      <td>{s.total_hours || 0}</td>
+                      <td>{s.used_hours || 0}</td>
+                      <td>{(s.total_hours || 0) - (s.used_hours || 0)}</td>
+                      <td>{s.completed_lessons}</td>
+                      <td>{s.created_at}</td>
+                      <td>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          style={{ marginRight: 8 }}
+                          onClick={() => openAdjustModal(s)}
+                        >
+                          调整学时
+                        </button>
+                        <button
+                          className="btn btn-default btn-sm"
+                          onClick={() => toggleHistory(s)}
+                        >
+                          {showHistory && showHistory.id === s.id ? '收起记录' : '调整记录'}
+                        </button>
+                      </td>
+                    </tr>
+                    {showHistory && showHistory.id === s.id && (
+                      <tr>
+                        <td colSpan={8} style={{ background: '#fafafa', padding: 0 }}>
+                          <div style={{ padding: '12px 20px' }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#333' }}>
+                              学时调整记录
+                            </div>
+                            {adjustments.length === 0 ? (
+                              <p style={{ color: '#999', fontSize: 13, padding: '10px 0' }}>暂无调整记录</p>
+                            ) : (
+                              <table style={{ width: '100%', fontSize: 13 }}>
+                                <thead>
+                                  <tr style={{ background: '#f0f0f0' }}>
+                                    <th style={{ padding: '6px 10px', textAlign: 'left' }}>时间</th>
+                                    <th style={{ padding: '6px 10px', textAlign: 'left' }}>操作</th>
+                                    <th style={{ padding: '6px 10px', textAlign: 'left' }}>学时</th>
+                                    <th style={{ padding: '6px 10px', textAlign: 'left' }}>变更前</th>
+                                    <th style={{ padding: '6px 10px', textAlign: 'left' }}>变更后</th>
+                                    <th style={{ padding: '6px 10px', textAlign: 'left' }}>操作人</th>
+                                    <th style={{ padding: '6px 10px', textAlign: 'left' }}>备注</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {adjustments.map(a => (
+                                    <tr key={a.id}>
+                                      <td style={{ padding: '6px 10px' }}>{a.created_at}</td>
+                                      <td style={{ padding: '6px 10px' }}>
+                                        <span style={{
+                                          color: a.action === 'recharge' ? '#52c41a' : '#ff4d4f',
+                                          fontWeight: 600,
+                                        }}>
+                                          {a.action === 'recharge' ? '充值' : '扣减'}
+                                        </span>
+                                      </td>
+                                      <td style={{ padding: '6px 10px' }}>{a.hours}</td>
+                                      <td style={{ padding: '6px 10px' }}>{a.before_total}</td>
+                                      <td style={{ padding: '6px 10px' }}>{a.after_total}</td>
+                                      <td style={{ padding: '6px 10px' }}>{a.admin_name}</td>
+                                      <td style={{ padding: '6px 10px' }}>{a.reason || '-'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {adjustModal.open && adjustModal.student && (
+        <div className="modal-overlay" onClick={closeAdjustModal}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <span style={{ fontSize: 16, fontWeight: 600 }}>
+                调整学时 - {adjustModal.student.name}
+              </span>
+              <span
+                className="modal-close"
+                onClick={closeAdjustModal}
+                style={{ cursor: 'pointer', color: '#999', fontSize: 18 }}
+              >
+                ×
+              </span>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>当前学时</div>
+                <div style={{ fontSize: 15, fontWeight: 500 }}>
+                  总学时 {adjustModal.student.total_hours || 0}，已练 {adjustModal.student.used_hours || 0}，剩余 {(adjustModal.student.total_hours || 0) - (adjustModal.student.used_hours || 0)}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>操作类型</div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="action"
+                      checked={adjustAction === 'recharge'}
+                      onChange={() => setAdjustAction('recharge')}
+                      style={{ marginRight: 6 }}
+                    />
+                    <span style={{ color: '#52c41a', fontWeight: 500 }}>充值（增加学时）</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="action"
+                      checked={adjustAction === 'deduct'}
+                      onChange={() => setAdjustAction('deduct')}
+                      style={{ marginRight: 6 }}
+                    />
+                    <span style={{ color: '#ff4d4f', fontWeight: 500 }}>扣减（减少学时）</span>
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>学时数量（正整数）</div>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  className="input"
+                  placeholder="请输入学时数"
+                  value={adjustHours}
+                  onChange={e => setAdjustHours(e.target.value.replace(/[^0-9]/g, ''))}
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #d9d9d9', borderRadius: 4, fontSize: 14 }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>备注（可选）</div>
+                <textarea
+                  className="input"
+                  placeholder="请输入调整原因"
+                  value={adjustReason}
+                  onChange={e => setAdjustReason(e.target.value)}
+                  rows={3}
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #d9d9d9', borderRadius: 4, fontSize: 14, resize: 'vertical' }}
+                />
+              </div>
+
+              {adjustAction === 'deduct' && adjustHours && parseInt(adjustHours, 10) > 0 && (
+                <div style={{ fontSize: 13, color: '#faad14', marginTop: -4, marginBottom: 8 }}>
+                  扣减后总学时将变为 {Math.max(0, (adjustModal.student.total_hours || 0) - parseInt(adjustHours, 10))}
+                </div>
+              )}
+              {adjustAction === 'recharge' && adjustHours && parseInt(adjustHours, 10) > 0 && (
+                <div style={{ fontSize: 13, color: '#52c41a', marginTop: -4, marginBottom: 8 }}>
+                  充值后总学时将变为 {(adjustModal.student.total_hours || 0) + parseInt(adjustHours, 10)}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '1px solid #f0f0f0' }}>
+              <button
+                className="btn btn-default"
+                onClick={closeAdjustModal}
+                disabled={adjustLoading}
+                style={{ padding: '6px 16px', border: '1px solid #d9d9d9', background: '#fff', borderRadius: 4, cursor: 'pointer' }}
+              >
+                取消
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleAdjustSubmit}
+                disabled={adjustLoading}
+                style={{
+                  padding: '6px 16px',
+                  border: 'none',
+                  background: adjustAction === 'recharge' ? '#52c41a' : '#ff4d4f',
+                  color: '#fff',
+                  borderRadius: 4,
+                  cursor: adjustLoading ? 'not-allowed' : 'pointer',
+                  opacity: adjustLoading ? 0.6 : 1,
+                }}
+              >
+                {adjustLoading ? '提交中...' : (adjustAction === 'recharge' ? '确认充值' : '确认扣减')}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -94,5 +94,12 @@ export const api = {
     getStats: () => request<any>('/admin/stats'),
     getStudents: () => request<any[]>('/admin/students'),
     getCoaches: () => request<any[]>('/admin/coaches'),
+    adjustHours: (studentId: string, data: { action: 'recharge' | 'deduct'; hours: number; reason?: string }) =>
+      request<any>(`/admin/students/${studentId}/adjust-hours`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    getHourAdjustments: (studentId: string) =>
+      request<any[]>(`/admin/students/${studentId}/hour-adjustments`),
   },
 };
